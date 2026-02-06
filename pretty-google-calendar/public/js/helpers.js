@@ -5,19 +5,35 @@ const { __, _x, _n, sprintf } = wp.i18n;
  * builds eventSources object.
  *
  * @param {array} settings Settings received from shortcode parameters
- * @returns object
+ * @returns object with eventSources array and identifiers array
  */
 function pgcal_resolve_cals(settings) {
   let calArgs = [];
-  const cals = settings["gcal"].split(",");
+  let identifiers = [];
+  const cals = settings["gcal"]
+    .split(",")
+    .map((cal) => cal.trim())
+    .filter((cal) => cal.length > 0);
+
+  // Parse custom calendar identifiers if provided
+  let customIds = [];
+  if (settings["cal_ids"]) {
+    customIds = settings["cal_ids"]
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+  }
 
   for (var i = 0; i < cals.length; i++) {
+    // Use custom ID if available, otherwise fall back to numeric index
+    const identifier = customIds[i] || i;
+    identifiers.push(identifier);
     calArgs.push({
       googleCalendarId: cals[i],
-      className: `pgcal-event-${i}`,
+      className: `pgcal-event-${identifier} pgcal-calendar-${identifier}-event`, // For per-calendar styling
     });
   }
-  return calArgs;
+  return { eventSources: calArgs, identifiers: identifiers };
 }
 
 /**
@@ -187,9 +203,9 @@ function pgcal_mapify(text) {
   const buttonLabel = __("Map", "pretty-google-calendar");
   let footer = "";
   if (text) {
-    footer += `<br /><a class="button" target="_blank" href="https://www.google.com/maps/search/?api=1&query=${encodeURI(
+    footer += `<br /><a class="button pgcal-map-button" target="_blank" href="https://www.google.com/maps/search/?api=1&query=${encodeURI(
       text
-    )}">${buttonLabel}</a>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp`;
+    )}">${buttonLabel}</a>`;
   }
   return footer;
 }
@@ -200,11 +216,78 @@ function pgcal_mapify(text) {
  * @param {string} url
  * @returns formatted HTML url
  */
-function pgcal_linkify(url) {
-  const buttonLabel = __("Add to Google Calendar", "pretty-google-calendar");
+function pgcal_addToGoogle(url) {
+  const buttonLabel = __("Add to Google", "pretty-google-calendar");
   if (url) {
-    return `<a class="button" href="${url}" target="_blank">${buttonLabel}</a>`;
+    return `<a class="button pgcal-add-to-google-button" href="${url}" target="_blank">${buttonLabel}</a>`;
   }
+}
+
+/**
+ * Create .ics download link for event
+ *
+ * @param {object} event FullCalendar event object
+ * @returns {string} HTML with download link
+ */
+function pgcal_downloadEventICS(event) {
+  // Sanitize text for iCalendar format
+  const sanitize = (str) => {
+    if (!str) return "";
+    return String(str)
+      .replace(/\\/g, "\\\\")
+      .replace(/;/g, "\\;")
+      .replace(/,/g, "\\,")
+      .replace(/\n/g, "\\n");
+  };
+
+  // Format dates for iCalendar
+  const formatICSDate = (dateStr, allDay) => {
+    const date = new Date(dateStr);
+    if (allDay) {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      return `${year}${month}${day}`;
+    } else {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      const hours = String(date.getUTCHours()).padStart(2, "0");
+      const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+      const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+      return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+    }
+  };
+
+  const startDate = formatICSDate(event.startStr, event.allDay);
+  const endDate = event.endStr
+    ? formatICSDate(event.endStr, event.allDay)
+    : startDate;
+  const uid = `${event.id || "event"}@pretty-google-calendar`;
+
+  let ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Pretty Google Calendar//EN\nCALSCALE:GREGORIAN\nMETHOD:PUBLISH\nBEGIN:VEVENT\nUID:${uid}\nDTSTAMP:${formatICSDate(
+    new Date().toISOString(),
+    false
+  )}\nDTSTART${event.allDay ? ";VALUE=DATE" : ""}:${startDate}\nDTEND${
+    event.allDay ? ";VALUE=DATE" : ""
+  }:${endDate}\nSUMMARY:${sanitize(event.title)}`;
+
+  if (event.extendedProps && event.extendedProps.location) {
+    ics += `\nLOCATION:${sanitize(event.extendedProps.location)}`;
+  }
+
+  if (event.extendedProps && event.extendedProps.description) {
+    ics += `\nDESCRIPTION:${sanitize(event.extendedProps.description)}`;
+  }
+
+  ics += `\nEND:VEVENT\nEND:VCALENDAR`;
+
+  const encodedICS = encodeURIComponent(ics);
+  const filename = `${event.title || "event"}.ics`;
+  const downloadLink = `data:text/calendar;charset=utf-8,${encodedICS}`;
+
+  const label = __("Download (.ics)", "pretty-google-calendar");
+  return `<a class="button pgcal-download-ics-button" href="${downloadLink}" download="${filename}">${label}</a>`;
 }
 
 /**

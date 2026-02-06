@@ -5,7 +5,7 @@
  *
  * @returns global settings
  */
-async function pgcalFetchGlobals(ajaxurl) {
+async function pgcalFetchGlobals(ajaxurl, nonce) {
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", ajaxurl, true);
@@ -14,6 +14,9 @@ async function pgcalFetchGlobals(ajaxurl) {
       "application/x-www-form-urlencoded; charset=UTF-8"
     );
     var data = "action=pgcal_ajax_action";
+    if (nonce) {
+      data += "&security=" + encodeURIComponent(nonce);
+    }
     xhr.onload = function () {
       if (xhr.status >= 200 && xhr.status < 300) {
         var response = JSON.parse(xhr.responseText);
@@ -26,8 +29,16 @@ async function pgcalFetchGlobals(ajaxurl) {
   });
 }
 
-async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
-  const globalSettings = await pgcalFetchGlobals(ajaxurl);
+async function pgcal_render_calendar(pgcalSettings, ajaxurl, ajaxNonce) {
+  // If the shortcode already embedded the public `google_api` key, use it
+  // directly and skip the AJAX fetch (which is now admin-only). Otherwise
+  // attempt to fetch globals via AJAX (admin-only usage).
+  let globalSettings = {};
+  if (pgcalSettings && pgcalSettings["google_api"]) {
+    globalSettings = { google_api: pgcalSettings["google_api"] };
+  } else {
+    globalSettings = await pgcalFetchGlobals(ajaxurl, ajaxNonce);
+  }
 
   // console.log(globalSettings["google_api"]); // DEBUG
 
@@ -37,7 +48,8 @@ async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
   let width = window.innerWidth;
 
   const views = pgcal_resolve_views(pgcalSettings);
-  const cals = pgcal_resolve_cals(pgcalSettings);
+  const calData = pgcal_resolve_cals(pgcalSettings);
+  const cals = calData.eventSources;
 
   // console.table(cals); // DEBUG
   // console.table(pgcalSettings); // DEBUG
@@ -68,6 +80,27 @@ async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
           meridiem: "short",
         },
       },
+      // Standard List Views
+      listDay: {
+        type: "list",
+        duration: { days: 1 },
+        buttonText: pgcalSettings["custom_list_button"],
+      },
+      listWeek: {
+        type: "list",
+        duration: { days: 7 },
+        buttonText: pgcalSettings["custom_list_button"],
+      },
+      listMonth: {
+        type: "list",
+        duration: { months: 1 },
+        buttonText: pgcalSettings["custom_list_button"],
+      },
+      listYear: {
+        type: "list",
+        duration: { years: 1 },
+        buttonText: pgcalSettings["custom_list_button"],
+      },
       // Custom List View
       listCustom: {
         type: "list",
@@ -84,8 +117,6 @@ async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
     // List options
     listDayFormat: { weekday: "long", month: "long", day: "numeric" },
 
-    timeZone: pgcalSettings["fixed_tz"], // TODO: Necessary?
-
     initialView: views.initial,
 
     headerToolbar: {
@@ -95,8 +126,14 @@ async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
     },
 
     eventDidMount: function (info) {
+      // Handle free/busy calendars with undefined titles
+      // Google Calendar API returns the string "undefined" for free/busy events
+      if (!info.event.title || info.event.title === "undefined") {
+        info.event.setProp("title", __("Busy", "pretty-google-calendar"));
+      }
+
       if (pgcalSettings["use_tooltip"] === "true") {
-        pgcal_tippyRender(info, currCal);
+        pgcal_tippyRender(info, currCal, pgcalSettings);
       }
     },
 
@@ -126,6 +163,19 @@ async function pgcal_render_calendar(pgcalSettings, ajaxurl) {
       }
     },
   };
+
+  // Hide past events if requested
+  if (pgcal_is_truthy(pgcalSettings["hide_past"])) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const todayString = `${year}-${month}-${day}`;
+
+    pgcalDefaults.validRange = {
+      start: todayString,
+    };
+  }
 
   const pgcalOverrides = JSON.parse(pgcalSettings["fc_args"]);
   const pgCalArgs = pgcal_argmerge(pgcalDefaults, pgcalOverrides);

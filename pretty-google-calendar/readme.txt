@@ -2,16 +2,31 @@
 
 Contributors: LBell
 Donate link: https://github.com/sponsors/lbell
-Tags: calendar, google calendar, events, gcal, cal, fullcalendar, pretty calendar, pretty
+Tags: calendar, google calendar, fullcalendar, gcal, pretty calendar
 Requires at least: 3.0
-Tested up to: 6.5.2
-Stable tag: 2.0.0
+Tested up to: 6.9
+Stable tag: 2.2.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 Embedded Google Calendars that don't suck.
 
 == Description ==
+
+= Plugin Migration Notice =
+
+Pretty Google Calendar is transitioning to [Hydrogen Calendar Embeds](https://wordpress.org/plugins/hydrogen-calendar-embeds/). Please install that plugin for future updates and improvements.
+
+= Why Switch to Hydrogen Calendar Embeds? =
+
+* No more fussing with the Google API — just use simple .ics calendar feeds
+* Display any calendar that provides a public .ics feed (e.g. Google Calendar, Apple Calendar, Outlook, etc.)
+* Works with **blocks** *and* **shortcodes**
+* More features, fewer bugs, and still lightweight
+* 100% FREE
+* Active development and ongoing support
+
+= Legacy Pretty Google Calendar Features =
 
 **You:** I just want to embed a Google Calendar in my WordPress site.
 **Google:** Here's a special kind of ugly!
@@ -45,6 +60,10 @@ This is a light and simple to use plugin that embeds Google Calendars in your we
 `gcal="CalendarID,CalendarID"`
 Calendar ID of the desired google calendar (note: must be set to 'Make available to public'. To display multiple calendars, separate ID's by a comma. (Note: calendars must fall under same API access.))
 
+`cal_ids="identifier,identifier"` \
+Optional custom CSS identifiers for each calendar (must match the number of calendars in `gcal`). Allows using meaningful names instead of numeric indexes for styling. Example: `cal_ids="soccer,baseball"` generates classes like `.pgcal-calendar-soccer` and `.pgcal-calendar-baseball`. Identifiers should be lowercase alphanumeric with hyphens.
+Defaults to numeric indexes (0, 1, 2, etc.)
+
 `locale="en"`
 Sets the locale for calendar. Defaults to "en".
 
@@ -66,7 +85,7 @@ Sets the label for the listCustom button. Defaults to "list".
 Sets the view types available. If only one view is provided, no view switch buttons will be shown. Defaults to "dayGridMonth, listCustom".
 
 `initial_view="dayGridMonth"`
-Sets the default view to be displayed when opening the page. Defaults to "dayGridMonth".
+Sets the default view to be displayed when opening the page. Defaults to "dayGridMonth". Note: If only one view is specified in "views", "initial_view" will automatically be set to that view and does not need to be specified.
 
 `enforce_listview_on_mobile="true"`
 Sets the change to the list view behavior on small screens. Options: "true" and "false". Defaults to "true". This option has no effect if there is no list view declared in the "views" option.
@@ -76,6 +95,9 @@ Sets the visibility of the "Today" button. Options: "true" and "false". Defaults
 
 `show_title="true"`
 Sets the visibility of the calendar title. Options: "true" and "false". Defaults to "true".
+
+`hide_past="false"`
+Hides past events from the calendar completely. Options: `true` and `false`. Defaults to `false`. When set to `true`, events before today will not be displayed in any view.
 
 `id_hash=random`
 Sets the ID hash for a calendar. If you have multiple calendars on a page and need to style them, you can set this to a permanent code. Otherwise, it'll randomly generate each load. (Note: as of v2.0.0 this can only be alphanumeric.)
@@ -96,11 +118,29 @@ Note: this is experimental - things may break.
 
 As of v1.7.0, each calendar gets it's own CSS selector: `pgcal-event-#` where the # is the order of the listed calendar (starting with 0). So if you have two calendars in one, you can use `pgcal-event-0` to style the first, and `pgcal-event-1` to style the second calendar.
 
+The following improvements were made in v2.2.0 for easier styling of multiple calendars:
+- Custome calendar identifiers via `cal_ids` shortcode argument (see above) (defaults to numeric indexes if not provided).
+- Events get new class name: `pgcal-calendar-0-event` for consistent naming convention (old class `pgcal-event-0` is still supported for backward compatibility).
+- Event pop-up tooltips now get a calendar-specific class: `pgcal-calendar-0-event-popup` for easier styling of event pop-ups per calendar.
+
 **Obtaining Google Calendar API Key**
 
-1. The good folks at WPBeginner have a comprehensive writeup: https://www.wpbeginner.com/plugins/how-to-add-google-calendar-in-wordpress/ 
-
-(Although in the API Restrictions Section, you may need "Don't Restrict Key" selected. YMMV.)
+1. Go to the Google Cloud Console and sign in.
+1. Click the project selector (top bar) → New project.
+1. Give the project a name and click Create.
+1. With the project selected, go to APIs & Services → Library.
+1. Search for Google Calendar API and click Enable.
+1. Go to APIs & Services → Credentials.
+1. Click Create credentials → API key.
+1. Copy the API key.
+1. (Recommended) Restrict the key:
+  1. Click the API key you just created.
+  1. Under Application restrictions, choose Websites (HTTP referrers).
+  1. Add your site’s URL (e.g. https://example.com/*).
+  1. Under API restrictions, choose Restrict key.
+  1. Select Google Calendar API.
+  1. Click Save.
+1. Paste the API key into Pretty Google Calendar’s Google API field in WordPress and save.
 
 
 Make your Google Calendar public:
@@ -117,7 +157,7 @@ Obtain your Google Calendar’s ID:
 1. In the Google Calendar interface, locate the “My calendars” area on the left.
 1. Hover over the calendar you need and click the downward arrow.
 1. A menu will appear. Click “Calendar settings”.
-1. In the “Calendar Address” section of the screen, you will see your Calendar ID. It will look something like “abcd1234@group.calendar.google.com” this is the value you enter into the shortcode.
+1. In the “Integrage Calendar” section of the screen, you will see your "Calendar ID". It will look something like “abcd1234@group.calendar.google.com” (or your email if it's your default calendar) this is the value you enter into the shortcode.
 
 == Screenshots ==
 
@@ -148,7 +188,42 @@ Pretty Google Calendar is purposefully simple and easy, set up with a few defaul
 
 Since it is based on Full Calendar, theoretically, anything that is possible there is possible here. Contact me for requests for additional functionality, and let's see what we can create together!
 
+
 == Changelog ==
+= 2.2.1 =
+- Introducing Hydrogen Calendar Embeds! (See https://wordpress.org/plugins/hydrogen-calendar-embeds/)
+
+= 2.2.0 =
+
+- Fixed: Handle spaces in multiple calendar IDs (Fixes #39)
+- Fixed: Free/busy events with undefined titles now display "Busy" (Closes #41)
+- Fixed: fc_args removing views
+- Added: hide_past shortcode argument (Closes #48)
+- Added: close button to tooltip (Closes #59)
+- Added: Better CSS in tooltip (Closes #56)
+- Added: Handle displayEventEnd arg in popup
+- Added: Download .ics button in popup
+- Added: Pupup button styling
+- Added: calendar-specific popup styling classes (closes #46)
+- Added: Custom calendar identifiers via `cal_ids` shortcode arg
+
+= 2.1.0 =
+
+- Fixed: Better list args parsing (Fixes #57)
+- Fixed: Removed hardcoded timezone argument for correct local time display. Override with `fc_args='{"timeZone":"###"}'` if needed.
+- Fixed: Admin CSS versioning
+- Fixed: Sanitization of Google API key in admin
+- Improved: id_hash generation
+- Improved: Automatic initial_view resolution when only one view is specified (Fixes #51)
+
+= 2.0.2 =
+
+- Fixed: Security fix (no known exploit)
+
+= 2.0.1 =
+
+- Tested: WordPress 6.9
+
 = 2.0.0 =
 
 - Fixed: XSS vulnerability (required elevate privileges, not likely to be exploited). May break CSS for folks using the `id_hash` shortcode argument.
